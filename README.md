@@ -1,5 +1,17 @@
 # Курсовая работа по QT. Update #2
 
+# Requirements
+- **QT Framework** : 6.8.0 или выше
+- **Compilers** : Clang/GCC/MSVC
+- **OC** : /MacOS/Linux
+
+# Установка и сборка
+
+## 1. Скачайте репозиторий в любую диреекторию к себе на устройство
+## 2. Выполните `qmake ../update-2-qt/`, чтобы сгенерировать Makefile
+## 3. Сборка.  
+    - На Linux / Macos : `make`
+## 4. Запуск приложения `./update-2-qt`
 # What is done
 - Contact.h/Contact.cpp и ContactManager.h/ContactManager.cpp никак не изменились по сравнению с Update # 1
 - Добавился класс ContactDialog. Класс отвечает за диологовое окно, используемое для добавления и редактирования контактов в приложении. 
