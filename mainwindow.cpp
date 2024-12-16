@@ -19,8 +19,9 @@ MainWindow::MainWindow(QWidget *parent)
     , model(new QStandardItemModel(this)) // Инициализация модели данных
     , proxyModel(new QSortFilterProxyModel(this)) // Инициализация прокси-модели для сортировки и фильтрации
 {
-    ui->setupUi(this); // Инициализация из Design
 
+    ui->setupUi(this); // Инициализация из Design
+    ui->tableViewContacts->setEditTriggers(QAbstractItemView::NoEditTriggers); // Решение пунктов To Do - просто выключим редактирование таблицы
     // Настройка таблицы
     ui->tableViewContacts->setSortingEnabled(true); // Сортировка по клику на заголовке столбцов
     ui->tableViewContacts->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch); // Равномерное растяжение таблица
@@ -84,6 +85,7 @@ void MainWindow::UpdateModel()
         model->appendRow(items); // Добавление новой строки в модель
     }
 }
+
 
 // Пересборка таблицы после изменения данных
 void MainWindow::UpdateTable()
@@ -155,70 +157,70 @@ void MainWindow::on_pushButtonDelete_clicked()
     QMessageBox::information(this, "Success", "Selected contact(s) deleted successfully!");
 }
 
-// Слот для кнопки "Edit"
 void MainWindow::on_pushButtonEdit_clicked()
 {
-    QModelIndexList selectedIndexes = ui->tableViewContacts->selectionModel()->selectedIndexes(); // Получаем список индексов
-
-    if (selectedIndexes.size() != 1) { // Проверка на выбор одной ячейки
+    QModelIndexList selectedIndexes = ui->tableViewContacts->selectionModel()->selectedIndexes();
+    if (selectedIndexes.size() != 1) {
         QMessageBox::warning(this, "Warning", "Please select exactly one field to edit.");
         return;
     }
 
-    QModelIndex proxyIndex = selectedIndexes.first(); // Индекс выбранной ячейки в прокси модели
-    QModelIndex sourceIndex = proxyModel->mapToSource(proxyIndex); // Преобразование из прокси модели в исходную модель
+    QModelIndex proxyIndex = selectedIndexes.first();
+    QModelIndex sourceIndex = proxyModel->mapToSource(proxyIndex);
     int row = sourceIndex.row();
     int column = sourceIndex.column();
 
+    QString currentValue = model->item(row, column)->text();
 
-    QString currentValue = model->item(row, column)->text(); // Получение текущего значения
-
-
-    QString fieldName = model->headerData(column, Qt::Horizontal).toString(); // Определение названия поля для отображения в диалоге
-
-    // Создание диалога для редактирования текста
     bool ok;
     QString newValue = QInputDialog::getText(this, tr("Edit Field"),
-                                             tr("Edit %1:").arg(fieldName),
+                                             tr("Edit %1:").arg(model->headerData(column, Qt::Horizontal).toString()),
                                              QLineEdit::Normal, currentValue, &ok);
-    if (ok && !newValue.isEmpty() && newValue != currentValue) { // Если нажал ок, и не пустое, и различно
-        model->setData(sourceIndex, newValue);
 
-        // Обновление менеджера данных
+    if (ok && !newValue.isEmpty() && newValue != currentValue) {
         try {
+            // Получаем контакт, вносим изменения и проверяем
             Contact contact = manager.GetContact(static_cast<size_t>(row));
-            // Обновление полей
+
+            // Устанавливаем новое значение (trimmed, если нужно)
+            QString trimmedValue = newValue.trimmed();
             switch (column) {
             case FirstName:
-                contact.SetFirstName(newValue.toStdString());
+                contact.SetFirstName(trimmedValue.toStdString());
                 break;
             case MiddleName:
-                contact.SetMiddleName(newValue.toStdString());
+                contact.SetMiddleName(trimmedValue.toStdString());
                 break;
             case LastName:
-                contact.SetLastName(newValue.toStdString());
+                contact.SetLastName(trimmedValue.toStdString());
                 break;
             case Date:
-                contact.SetDate(newValue.toStdString());
+                contact.SetDate(trimmedValue.toStdString());
                 break;
             case Email:
-                contact.SetEmail(newValue.toStdString());
+                contact.SetEmail(trimmedValue.toStdString());
                 break;
             case PhoneNumber:
-                contact.SetPhoneNumber(newValue.toStdString());
+                contact.SetPhoneNumber(trimmedValue.toStdString());
                 break;
             default:
                 break;
             }
+
+            // Если никаких исключений не было — обновляем контакт в менеджере
             manager.UpdateContact(static_cast<size_t>(row), contact);
+
+            // Теперь можно безопасно обновить модель
+            model->setData(sourceIndex, trimmedValue);
             QMessageBox::information(this, "Success", "Field updated successfully!");
-            qDebug() << "Field" << fieldName << "at row" << row << "updated to" << newValue;
         } catch (const std::exception &e) {
+            // Если возникла ошибка, показываем её, но не обновляем модель и не вызываем UpdateTable()
             QMessageBox::warning(this, "Error", QString::fromStdString(e.what()));
-            qDebug() << "Error updating field:" << QString::fromStdString(e.what());
+            // Таблица остаётся без изменений
         }
     }
 }
+
 
 // Слот для кнопки "Load"
 void MainWindow::on_pushButtonLoad_clicked()

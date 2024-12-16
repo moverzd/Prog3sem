@@ -1,26 +1,25 @@
 #include "contactdialog.h"
-#include "ui_contactdialog.h" // для Ui:ContactDialog
+#include "ui_contactdialog.h"
 #include <stdexcept> // для std::invalid_argument
 
-//Конструктор
 ContactDialog::ContactDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::ContactDialog)
 {
-    ui->setupUi(this); // настройка пользовательского интерфейса.
-    // То есть создание всех виджетов, установка свойств, сигналов и слотов из ui файла
+    ui->setupUi(this);
 }
 
-//Деструктор
 ContactDialog::~ContactDialog()
 {
     delete ui;
 }
 
-// Установка данных контакта в поля окна
 void ContactDialog::SetContactData(const Contact &contact)
 {
-    ui->lineEditFirstName->setText(QString::fromStdString(contact.GetFirstName())); // Установка текста в поле -> преобразование
+    // При установке данных в поля диалога мы можем не триммить,
+    // так как данные из Contact уже должны быть валидированы и очищены,
+    // либо приходить в корректном формате.
+    ui->lineEditFirstName->setText(QString::fromStdString(contact.GetFirstName()));
     ui->lineEditMiddleName->setText(QString::fromStdString(contact.GetMiddleName()));
     ui->lineEditLastName->setText(QString::fromStdString(contact.GetLastName()));
     ui->lineEditDate->setText(QString::fromStdString(contact.GetDate()));
@@ -28,19 +27,29 @@ void ContactDialog::SetContactData(const Contact &contact)
     ui->lineEditPhoneNumber->setText(QString::fromStdString(contact.GetPhoneNumber()));
 }
 
-// Получение полей и формаирование Contact
 Contact ContactDialog::GetContactData() const
 {
+    // Извлекаем текст из полей ввода и удаляем пробелы в начале и конце:
+    QString firstName = ui->lineEditFirstName->text().trimmed();
+    QString middleName = ui->lineEditMiddleName->text().trimmed();
+    QString lastName = ui->lineEditLastName->text().trimmed();
+    QString date = ui->lineEditDate->text().trimmed();
+    QString email = ui->lineEditEmail->text().trimmed();
+    QString phoneNumber = ui->lineEditPhoneNumber->text().trimmed();
+
     Contact contact;
     try {
-        contact.SetFirstName(ui->lineEditFirstName->text().toStdString()); // Извлечение из поля ввода -> преобразование -> установка
-        contact.SetMiddleName(ui->lineEditMiddleName->text().toStdString());
-        contact.SetLastName(ui->lineEditLastName->text().toStdString());
-        contact.SetDate(ui->lineEditDate->text().toStdString());
-        contact.SetEmail(ui->lineEditEmail->text().toStdString());
-        contact.SetPhoneNumber(ui->lineEditPhoneNumber->text().toStdString());
-    } catch (const std::invalid_argument &e) { // Блок валидации
+        // Передаем очищенные строки в Contact
+        contact.SetFirstName(firstName.toStdString());
+        contact.SetMiddleName(middleName.toStdString());
+        contact.SetLastName(lastName.toStdString());
+        contact.SetDate(date.toStdString());
+        contact.SetEmail(email.toStdString());
+        contact.SetPhoneNumber(phoneNumber.toStdString());
+    } catch (const std::invalid_argument &e) {
+        // Если валидация в Contact выбросила исключение, пробрасываем дальше
         throw std::invalid_argument(QString::fromStdString(e.what()).toStdString());
     }
+
     return contact;
 }
