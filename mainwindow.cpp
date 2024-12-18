@@ -22,11 +22,15 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->setupUi(this); // Инициализация из Design
     ui->tableViewContacts->setEditTriggers(QAbstractItemView::NoEditTriggers); // Решение пунктов To Do - просто выключим редактирование таблицы
+    ui->tableViewContacts->setSelectionBehavior(QAbstractItemView::SelectItems); // Выделение отдельных ячеек
+    ui->tableViewContacts->setSelectionMode(QAbstractItemView::SingleSelection); // Можно выделить только одну ячейку
+
     // Настройка таблицы
     ui->tableViewContacts->setSortingEnabled(true); // Сортировка по клику на заголовке столбцов
     ui->tableViewContacts->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch); // Равномерное растяжение таблица
     ui->tableViewContacts->setSelectionBehavior(QAbstractItemView::SelectItems); // Выбор отдельных ячеек
     ui->tableViewContacts->setSelectionMode(QAbstractItemView::SingleSelection); // Ограничение выбора одной ячейкой
+
 
     // Инициализация моделей
     SetupModel();
@@ -62,9 +66,18 @@ void MainWindow::SetupModel()
 // Настройка прокси модели для фильтрации
 void MainWindow::SetupProxyModel()
 {
-    proxyModel->setSourceModel(model); // Установка model для прокси-модели
-    proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive); // Нечувствительность к регистру фильтрации
-    proxyModel->setFilterKeyColumn(-1); // По умолчанию фильтровать по всем колонкам
+    proxyModel->setSourceModel(model); // Устанавливаем модель данных
+    proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive); // Нечувствительность к регистру
+    proxyModel->setFilterKeyColumn(-1); // Фильтрация по всем колонкам
+
+    // Подключаем сигнал для динамической смены роли сортировки
+    connect(ui->tableViewContacts->horizontalHeader(), &QHeaderView::sectionClicked, this, [this](int column) {
+        if (column == 3) { // Колонка с датами (индекс 3)
+            proxyModel->setSortRole(Qt::UserRole); // Используем скрытое числовое значение
+        } else {
+            proxyModel->setSortRole(Qt::DisplayRole); // Стандартная сортировка
+        }
+    });
 }
 
 // Перегрузка данных модели из ContactManager, каждый контакт превращается в строку в QStandartItemModel
@@ -75,14 +88,24 @@ void MainWindow::UpdateModel()
     const auto &contacts = manager.GetAllContacts();
     for (const auto &contact : contacts) {
         QList<QStandardItem *> items;
+
         items << new QStandardItem(QString::fromStdString(contact.GetFirstName()));
         items << new QStandardItem(QString::fromStdString(contact.GetMiddleName()));
         items << new QStandardItem(QString::fromStdString(contact.GetLastName()));
-        items << new QStandardItem(QString::fromStdString(contact.GetDate()));
+
+        // Обработка даты
+        QString dateStr = QString::fromStdString(contact.GetDate());
+        QDate date = QDate::fromString(dateStr, "dd-MM-yyyy");
+        QStandardItem *dateItem = new QStandardItem(dateStr);
+        if (date.isValid()) {
+            dateItem->setData(date.toString("yyyyMMdd").toInt(), Qt::UserRole); // Сохраняем скрытое числовое значение
+        }
+        items << dateItem;
+
         items << new QStandardItem(QString::fromStdString(contact.GetEmail()));
         items << new QStandardItem(QString::fromStdString(contact.GetPhoneNumber()));
 
-        model->appendRow(items); // Добавление новой строки в модель
+        model->appendRow(items); // Добавление строки
     }
 }
 
@@ -120,58 +143,53 @@ void MainWindow::on_pushButtonAdd_clicked()
 
 //Слот удаления контакта
 void MainWindow::on_pushButtonDelete_clicked()
-{   //Извлечение списка индексов строк, выбранных в QTableView
-    QModelIndexList selectedRows = ui->tableViewContacts->selectionModel()->selectedRows();
-    // Предупреждение, если работаем с пустой строкой
-    if (selectedRows.isEmpty()) {
-        QMessageBox::warning(this, "Warning", "Please select at least one contact to delete.");
+{
+    // Получаем текущий индекс (выбранная ячейка)
+    QModelIndex currentIndex = ui->tableViewContacts->currentIndex();
+
+    if (!currentIndex.isValid()) {
+        QMessageBox::warning(this, "Warning", "Please select a cell to delete the corresponding contact.");
         return;
     }
 
-    // Сборка уникальных номеров строк
-    QSet<int> rowsToDelete;
-    for (const QModelIndex &index : selectedRows) {
-        rowsToDelete.insert(proxyModel->mapToSource(index).row()); // Преобразование индексов из прокси-модели в исходную
-    }
+    // Получаем строку из прокси-модели и преобразуем в исходную модель
+    int row = proxyModel->mapToSource(currentIndex).row();
 
     // Подтверждение удаления
     int ret = QMessageBox::warning(this, "Confirm Deletion",
-                                   QString("Are you sure you want to delete %1 contact(s)?").arg(rowsToDelete.size()),
+                                   QString("Are you sure you want to delete this contact?"),
                                    QMessageBox::Yes | QMessageBox::No);
     if (ret != QMessageBox::Yes)
         return;
 
-    // Удаление контактов с конца, чтобы избежать сдвига индексов
-    QList<int> sortedRows = rowsToDelete.values();
-    std::sort(sortedRows.begin(), sortedRows.end(), std::greater<int>());
-    for (int row : sortedRows) {
-        try {
-            manager.RemoveContact(static_cast<size_t>(row));
-            qDebug() << "Deleted contact at row:" << row;
-        } catch (const std::out_of_range &e) {
-            qDebug() << "Error deleting contact at row" << row << ":" << e.what();
-        }
+    try {
+        manager.RemoveContact(static_cast<size_t>(row)); // Удаляем контакт из менеджера
+        model->removeRow(row);                          // Удаляем строку из модели
+        QMessageBox::information(this, "Success", "Contact deleted successfully!");
+        qDebug() << "Deleted contact at row:" << row;
+    } catch (const std::out_of_range &e) {
+        qDebug() << "Error deleting contact at row:" << row << ":" << e.what();
     }
-
-    UpdateTable();
-    QMessageBox::information(this, "Success", "Selected contact(s) deleted successfully!");
 }
+
 
 void MainWindow::on_pushButtonEdit_clicked()
 {
-    QModelIndexList selectedIndexes = ui->tableViewContacts->selectionModel()->selectedIndexes();
-    if (selectedIndexes.size() != 1) {
-        QMessageBox::warning(this, "Warning", "Please select exactly one field to edit.");
+    // Получаем текущий индекс (выбранная ячейка)
+    QModelIndex currentIndex = ui->tableViewContacts->currentIndex();
+
+    if (!currentIndex.isValid()) {
+        QMessageBox::warning(this, "Warning", "Please select a cell to edit.");
         return;
     }
 
-    QModelIndex proxyIndex = selectedIndexes.first();
-    QModelIndex sourceIndex = proxyModel->mapToSource(proxyIndex);
-    int row = sourceIndex.row();
-    int column = sourceIndex.column();
+    // Получаем строку и столбец
+    int row = proxyModel->mapToSource(currentIndex).row();
+    int column = proxyModel->mapToSource(currentIndex).column();
 
     QString currentValue = model->item(row, column)->text();
 
+    // Запрашиваем новое значение для выбранной ячейки
     bool ok;
     QString newValue = QInputDialog::getText(this, tr("Edit Field"),
                                              tr("Edit %1:").arg(model->headerData(column, Qt::Horizontal).toString()),
@@ -179,47 +197,34 @@ void MainWindow::on_pushButtonEdit_clicked()
 
     if (ok && !newValue.isEmpty() && newValue != currentValue) {
         try {
-            // Получаем контакт, вносим изменения и проверяем
+            // Получаем контакт и обновляем конкретное поле
             Contact contact = manager.GetContact(static_cast<size_t>(row));
 
-            // Устанавливаем новое значение (trimmed, если нужно)
-            QString trimmedValue = newValue.trimmed();
             switch (column) {
-            case FirstName:
-                contact.SetFirstName(trimmedValue.toStdString());
-                break;
-            case MiddleName:
-                contact.SetMiddleName(trimmedValue.toStdString());
-                break;
-            case LastName:
-                contact.SetLastName(trimmedValue.toStdString());
-                break;
-            case Date:
-                contact.SetDate(trimmedValue.toStdString());
-                break;
-            case Email:
-                contact.SetEmail(trimmedValue.toStdString());
-                break;
-            case PhoneNumber:
-                contact.SetPhoneNumber(trimmedValue.toStdString());
-                break;
-            default:
-                break;
+            case 0: contact.SetFirstName(newValue.trimmed().toStdString()); break;
+            case 1: contact.SetMiddleName(newValue.trimmed().toStdString()); break;
+            case 2: contact.SetLastName(newValue.trimmed().toStdString()); break;
+            case 3: contact.SetDate(newValue.trimmed().toStdString()); break;
+            case 4: contact.SetEmail(newValue.trimmed().toStdString()); break;
+            case 5: contact.SetPhoneNumber(newValue.trimmed().toStdString()); break;
+            default: break;
             }
 
-            // Если никаких исключений не было — обновляем контакт в менеджере
+            // Обновляем контакт в менеджере
             manager.UpdateContact(static_cast<size_t>(row), contact);
 
-            // Теперь можно безопасно обновить модель
-            model->setData(sourceIndex, trimmedValue);
+            // Обновляем модель данных
+            model->setData(model->index(row, column), newValue.trimmed());
+
             QMessageBox::information(this, "Success", "Field updated successfully!");
+            qDebug() << "Updated row:" << row << "column:" << column << "with value:" << newValue;
         } catch (const std::exception &e) {
-            // Если возникла ошибка, показываем её, но не обновляем модель и не вызываем UpdateTable()
             QMessageBox::warning(this, "Error", QString::fromStdString(e.what()));
-            // Таблица остаётся без изменений
         }
     }
 }
+
+
 
 
 // Слот для кнопки "Load"
