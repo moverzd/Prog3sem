@@ -6,6 +6,10 @@
 #include <vector>
 #include <functional>
 
+#include <QSqlDatabase>
+#include <QSqlError>
+#include <QSqlQuery>
+
 
 class ContactManager {
 public:
@@ -19,8 +23,14 @@ public:
     void LoadFromFile(const std::string &filename);
     void SaveToFile(const std::string &filename) const;
 
+    void LoadFromDB(const QString &connectionName = "default");
+    void SaveToDB(const QString &connectionName = "default");
+
+
 private:
     std::vector<Contact> Contacts;
+
+    QSqlDatabase db;  // добавляем член класса для работы с БД
 };
 
 #endif // CONTACTMANAGER_H

@@ -44,6 +44,9 @@ private slots:
     void on_lineEditSearch_textChanged(const QString &text); // Обновление таблицы в моменте Фильтрации
     void on_comboBoxSearchField_currentIndexChanged(int index); // Обработка изменения выбранного поля поиска
 
+    void on_pushButtonLoadDB_clicked();
+    void on_pushButtonSaveDB_clicked();
+
 
 private:
     Ui::MainWindow *ui; // Обращение виджетам и элементов в mainwindow.ui

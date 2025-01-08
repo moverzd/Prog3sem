@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <iostream>
 #include <sstream>
+#include <QFile>
+#include <QStringList>
 
 // Добавление контакта
 void ContactManager::AddContact(const Contact &contact)
@@ -121,3 +123,97 @@ void ContactManager::SaveToFile(const std::string &filename) const
     outFile.close();
     std::cout << "Contacts saved to " << filename << "\n";
 }
+
+
+
+void ContactManager::LoadFromDB(const QString &connectionName) {
+    // Проверяем, существует ли соединение с данным именем
+    if (!QSqlDatabase::contains(connectionName)) {
+        db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
+        db.setDatabaseName("contacts.db");
+
+    } else {
+        db = QSqlDatabase::database(connectionName);
+    }
+
+    if (!db.isOpen()) {
+        if (!db.open()) {
+            throw std::runtime_error(db.lastError().text().toStdString());
+        }
+    }
+
+    QSqlQuery query(db);
+    // Создание таблицы, если её нет
+    if (!query.exec("CREATE TABLE IF NOT EXISTS contacts ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                    "firstName TEXT,"
+                    "middleName TEXT,"
+                    "lastName TEXT,"
+                    "date TEXT,"
+                    "email TEXT,"
+                    "phoneNumber TEXT)")) {
+        throw std::runtime_error(query.lastError().text().toStdString());
+    }
+
+    Contacts.clear();
+
+    if (!query.exec("SELECT firstName, middleName, lastName, date, email, phoneNumber FROM contacts")) {
+        throw std::runtime_error(query.lastError().text().toStdString());
+    }
+
+    while (query.next()) {
+        Contact contact;
+        contact.SetFirstName(query.value(0).toString().toStdString());
+        contact.SetMiddleName(query.value(1).toString().toStdString());
+        contact.SetLastName(query.value(2).toString().toStdString());
+        contact.SetDate(query.value(3).toString().toStdString());
+        contact.SetEmail(query.value(4).toString().toStdString());
+        contact.SetPhoneNumber(query.value(5).toString().toStdString());
+        Contacts.push_back(contact);
+    }
+}
+
+void ContactManager::SaveToDB(const QString &connectionName) {
+    // Проверяем, существует ли соединение с данным именем
+    if (!QSqlDatabase::contains(connectionName)) {
+        db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
+        db.setDatabaseName("contacts.db");
+    } else {
+        db = QSqlDatabase::database(connectionName);
+    }
+
+    if (!db.isOpen()) {
+        if (!db.open()) {
+            throw std::runtime_error(db.lastError().text().toStdString());
+        }
+    }
+    QSqlQuery query(db);
+
+    // Очистка таблицы перед сохранением
+    if (!query.exec("DELETE FROM contacts")) {
+        throw std::runtime_error(query.lastError().text().toStdString());
+    }
+
+    // Выполняем вставку для каждого контакта
+    for (const auto &contact : Contacts) {
+        // Подготавливаем запрос заново для каждого контакта
+        if (!query.prepare("INSERT INTO contacts (firstName, middleName, lastName, date, email, phoneNumber) "
+                           "VALUES (?, ?, ?, ?, ?, ?)")) {
+            throw std::runtime_error(query.lastError().text().toStdString());
+        }
+
+        query.addBindValue(QString::fromStdString(contact.GetFirstName()));
+        query.addBindValue(QString::fromStdString(contact.GetMiddleName()));
+        query.addBindValue(QString::fromStdString(contact.GetLastName()));
+        query.addBindValue(QString::fromStdString(contact.GetDate()));
+        query.addBindValue(QString::fromStdString(contact.GetEmail()));
+        query.addBindValue(QString::fromStdString(contact.GetPhoneNumber()));
+
+        if (!query.exec()) {
+            throw std::runtime_error(query.lastError().text().toStdString());
+        }
+    }
+}
+
+
+

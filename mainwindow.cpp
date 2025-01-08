@@ -275,3 +275,87 @@ void MainWindow::on_comboBoxSearchField_currentIndexChanged(int index)
         proxyModel->setFilterKeyColumn(index - 1); // Соответствие индексу колонок модели
     }
 }
+
+
+void MainWindow::on_pushButtonLoadDB_clicked() {
+    // Открываем диалог выбора файла базы данных
+    QString dbFile = QFileDialog::getOpenFileName(this,
+                                                  tr("Select Database File"),
+                                                  "",
+                                                  tr("SQLite Database Files (*.db *.sqlite);;All Files (*)"));
+    if(dbFile.isEmpty())
+        return;  // Если пользователь отменил выбор
+
+    QString connectionName = "customConnectionLoad";
+
+    // Настраиваем соединение с выбранным файлом БД
+    if(!QSqlDatabase::contains(connectionName)) {
+        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
+        db.setDatabaseName(dbFile);
+        if(!db.open()) {
+            QMessageBox::critical(this, tr("Database Error"), db.lastError().text());
+            return;
+        }
+    } else {
+        QSqlDatabase db = QSqlDatabase::database(connectionName);
+        if(db.databaseName() != dbFile) {
+            db.close();
+            db.setDatabaseName(dbFile);
+            if(!db.open()) {
+                QMessageBox::critical(this, tr("Database Error"), db.lastError().text());
+                return;
+            }
+        }
+    }
+
+    try {
+        manager.LoadFromDB(connectionName);
+        UpdateTable();
+        QMessageBox::information(this, tr("Success"), tr("Contacts loaded from database successfully!"));
+        qDebug() << "Contacts loaded from database.";
+    } catch (const std::exception &e) {
+        QMessageBox::warning(this, tr("Error"), e.what());
+        qDebug() << "Error loading contacts from database:" << e.what();
+    }
+}
+
+void MainWindow::on_pushButtonSaveDB_clicked() {
+    // Открываем диалог выбора файла для сохранения базы данных
+    QString dbFile = QFileDialog::getSaveFileName(this,
+                                                  tr("Select Database File to Save"),
+                                                  "",
+                                                  tr("SQLite Database Files (*.db *.sqlite);;All Files (*)"));
+    if(dbFile.isEmpty())
+        return;  // Пользователь отменил выбор
+
+    QString connectionName = "customConnectionSave";
+
+    // Настраиваем соединение с выбранным файлом БД для сохранения
+    if(!QSqlDatabase::contains(connectionName)) {
+        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
+        db.setDatabaseName(dbFile);
+        if(!db.open()) {
+            QMessageBox::critical(this, tr("Database Error"), db.lastError().text());
+            return;
+        }
+    } else {
+        QSqlDatabase db = QSqlDatabase::database(connectionName);
+        if(db.databaseName() != dbFile) {
+            db.close();
+            db.setDatabaseName(dbFile);
+            if(!db.open()) {
+                QMessageBox::critical(this, tr("Database Error"), db.lastError().text());
+                return;
+            }
+        }
+    }
+
+    try {
+        manager.SaveToDB(connectionName);
+        QMessageBox::information(this, tr("Success"), tr("Contacts saved to database successfully!"));
+        qDebug() << "Contacts saved to database successfully.";
+    } catch(const std::exception &e) {
+        QMessageBox::warning(this, tr("Error"), e.what());
+        qDebug() << "Error saving contacts to database:" << e.what();
+    }
+}
