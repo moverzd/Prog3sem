@@ -1,5 +1,6 @@
 # ABOUT
 Репозиторий курсовой работы 3 семестра. Тема Телефонный справочник. За апдейтами можно сделать в ветках
+
 [Ссылка на отчет по всем подзадачам](https://docs.google.com/document/d/1ZRhswmML7agoaSf9T7pdhky3tKz5s1DJ8WS7oeyfGoQ/edit?usp=sharing)
 
 # Процесс
